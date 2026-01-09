@@ -1,0 +1,55 @@
+openssl genrsa -out regatta.key 2048
+
+# cat regatta_cert.cnf
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = req_ext
+prompt = no
+
+[req_distinguished_name]
+C   = US
+ST  = MI
+CN  = regatta.furnace.net
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+IP.1 = 192.168.1.50
+DNS.1 = regatta.furnace.net
+DNS.2 = regatta
+
+
+## generate crt file
+openssl req -new -key regatta.key -out regatta.csr -config regatta_cert.cnf
+
+## verify subjectAltName
+openssl req -noout -text -in regatta.csr | grep -A 1 "Subject Alternative Name"
+
+## Generate SAN Certificate with X509 extensions
+openssl x509 -req -days 365 -in regatta.csr -out regatta.crt -key cluster.key -extensions req_ext -extfile regatta_cert.cnf
+
+## Combine files
+cat regatta.key regatta.crt > regatta.pem
+
+## Copy it to the /etc/haproxy directory
+cp regatta.pem /etc/haproxy
+
+## add bind line to front end and Restart HAProxy  
+bind :443 ssl crt /usr/local/etc/haproxy/regatta.pem
+
+## copy to local cert store
+sudo cp regatta.crt /usr/local/share/ca-certificates/
+
+## reload certificates
+sudo update-ca-certificates
+
+
+##Add to Edge DB
+certutil -d ~/.pki/nssdb -A -t "TCu,Cu,Tu" -n "regatta.furnace.net" -i regatta.crt
+
+##Query Edge db
+sudo certutil -L -d ~/.pki/nssdb
+
+## Remove a cert
+sudo certutil -D -n "regatta.furnace.net" -d ~/.pki/nssdb/

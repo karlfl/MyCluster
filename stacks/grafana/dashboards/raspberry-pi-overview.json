@@ -1,0 +1,44 @@
+{
+  "title": "Raspberry Pi Hardware",
+  "uid": "raspberry-pi-hardware",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "CPU Temperature",
+      "targets": [
+        {
+          "expr": "node_hwmon_temp_celsius"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "CPU Frequency",
+      "targets": [
+        {
+          "expr": "node_cpu_frequency_min_hertz"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Voltage",
+      "targets": [
+        {
+          "expr": "node_hwmon_in_volts"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Throttling Flags",
+      "targets": [
+        {
+          "expr": "node_hwmon_throttle"
+        }
+      ]
+    }
+  ]
+}

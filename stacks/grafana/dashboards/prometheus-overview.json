@@ -1,0 +1,44 @@
+{
+  "title": "Prometheus Overview",
+  "uid": "prometheus-overview",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Scrape Duration",
+      "targets": [
+        {
+          "expr": "rate(prometheus_target_scrapes_exceeded_sample_limit_total[5m])"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Active Targets",
+      "targets": [
+        {
+          "expr": "prometheus_targets_active"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Prometheus Memory Usage",
+      "targets": [
+        {
+          "expr": "process_resident_memory_bytes"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Prometheus Storage Chunks",
+      "targets": [
+        {
+          "expr": "prometheus_tsdb_head_chunks"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+all:
+  vars:
+    ansible_user: admin
+    ansible_python_interpreter: /usr/bin/python3.13
+  children:
+    cluster:
+      hosts:
+        LabRax-PI3-Node1.local:
+        LabRax-PI4-Node2.local:
+        LabRax-PI4-Node3.local:
+    manager:
+      hosts:
+        LabRax-PI3-Node1.local:
+    pihole:
+      hosts:
+        LabRax-PI4-Node2.local:
+        LabRax-PI4-Node3.local:
+    portainer:
+      hosts:
+        LabRax-PI3-Node1.local:
+    nfshost:
+      hosts:
+        LabRax-PI4-Node3.local:

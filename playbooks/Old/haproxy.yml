@@ -1,0 +1,113 @@
+- name: Configure HAProxy on Pi Docker Swarm
+  hosts: cluster
+  become: true
+  tasks:
+    - name: Ensure HAProxy config directory exists
+      file:
+        path: /etc/haproxy
+        state: directory
+        mode: '0755'
+
+    - name: Copy HAProxy configuration
+      copy:
+        dest: /etc/haproxy/haproxy.cfg
+        content: |
+          global
+              log     	 fd@2 local2
+              chroot  	 /var/lib/haproxy
+              pidfile 	 /var/run/haproxy.pid
+              maxconn 	 4000
+              user    	 haproxy
+              group   	 haproxy
+              stats socket /var/lib/haproxy/stats expose-fd listeners
+              master-worker
+
+          resolvers docker
+              nameserver dns1 127.0.0.11:53
+              resolve_retries 3
+              timeout resolve 1s
+              timeout retry   1s
+              hold other      10s
+              hold refused    10s
+              hold nx         10s
+              hold timeout    10s
+              hold valid      10s
+              hold obsolete   10s
+
+          defaults
+              timeout connect 10s
+              timeout client 30s
+              timeout server 30s
+              log global
+              mode http
+              option httplog
+
+          frontend  fe_web
+              bind *:80
+              use_backend ha_stat if { path -i /hastats }
+              use_backend be_portainer_service if { path -i /portainer }
+              default_backend be_apache_service 
+
+          backend be_apache_service
+              balance roundrobin
+              server-template apache- 3 apache-Service:80 check resolvers docker init-addr libc,none
+
+          # backend be_apache_service_wrong_case
+          #     balance roundrobin
+          #     server-template apache- 3 apache-service:80 check resolvers docker init-addr libc,none
+
+          backend be_portainer_service
+              balance roundrobin
+              server-template portainer- 1 portainer_portainer:9443 check resolvers docker init-addr libc,none
+
+          backend ha_stat
+              stats enable
+              stats uri /hastats
+              stats refresh 15s
+              stats show-legends
+              stats show-node
+
+    - name: Install Keepalived
+      apt:
+        name: keepalived
+        state: present
+        update_cache: yes  
+
+    - name: Configure Keepalived
+      copy:
+        dest: /etc/keepalived/keepalived.conf
+        content: |
+          global_defs {
+            enable_script_security
+            script_user root 
+          }
+          
+          # if port 80 is available make this the active by adding an alternate IP address to the interface
+          vrrp_script haproxy_container {
+              script "/usr/bin/nc -z 127.0.0.1 80" 
+              interval 5
+              weight -20
+              fall 2
+              rise 2
+          }
+
+          vrrp_instance VI_1 {
+              interface wlan0  # uncomment for wifi
+              #interface eth0  # uncomment for ethernet
+              state BACKUP
+              virtual_router_id 205
+              priority 100
+              virtual_ipaddress {
+                  192.168.1.30/24
+              }
+              track_script {
+                  haproxy_container
+              }
+          }
+      notify: Restart keepalived
+
+  handlers:
+    - name: Restart keepalived
+      ansible.builtin.service:
+        name: keepalived
+        state: restarted

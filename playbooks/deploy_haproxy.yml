@@ -1,0 +1,156 @@
+#########################
+# Setup Prerequisites
+#########################
+- name: Setup HAProxy Prerequisites on all Nodes
+  hosts: cluster
+  become: true
+  tasks:
+    - name: Ensure HAProxy config directory exists
+      file:
+        path: /etc/haproxy
+        state: directory
+        mode: '0755'
+
+    - name: Copy HAProxy configuration
+      copy:
+        dest: /etc/haproxy/haproxy.cfg
+        content: |
+          global
+              log     	 fd@2 local2
+              maxconn 	 4000
+
+          resolvers docker
+              nameserver dns1 127.0.0.11:53
+              resolve_retries 3
+              timeout resolve 1s
+              timeout retry   1s
+              hold other      10s
+              hold refused    10s
+              hold nx         10s
+              hold timeout    10s
+              hold valid      10s
+              hold obsolete   10s
+
+          defaults
+              timeout connect 10s
+              timeout client 30s
+              timeout server 30s
+              log global
+              mode http
+              option httplog
+
+          frontend  fe_web
+              bind :80
+              bind :443 ssl crt /usr/local/etc/haproxy/cluster.pem 
+
+              # Redirect HTTP to HTTPS
+              # http-request redirect scheme https unless { ssl_fc }
+
+              use_backend be_portainer if { path_beg /portainer }
+              use_backend ha_stat if { path -i /stats }
+              default_backend be_apache_service
+
+          backend be_apache_service
+              balance roundrobin
+              server-template apache- 3 apache-Service:80 check resolvers docker init-addr libc,none
+
+          backend be_portainer
+              # strip the prefix '/portainer' off of the path
+              http-request replace-path /portainer(/)(?)(.*) /\2\3
+              # server-template portainer- 1 portainer_portainer:9443 ssl check verify none resolvers docker init-addr libc,none
+              server-template portainer- 1 portainer_portainer:9000 check resolvers docker init-addr libc,none
+
+          backend ha_stat
+              stats enable
+              stats uri /stats
+              stats refresh 15s
+              stats show-legends
+              stats show-node
+
+    - name: Install Keepalived
+      apt:
+        name: keepalived
+        state: present
+        update_cache: yes  
+
+    - name: Configure Keepalived
+      copy:
+        dest: /etc/keepalived/keepalived.conf
+        content: |
+          global_defs {
+            enable_script_security
+            script_user root 
+          }
+          
+          # if port 80 is available make this the active by adding an alternate IP address to the interface
+          vrrp_script haproxy_container {
+              script "/usr/bin/nc -z 127.0.0.1 80" 
+              interval 5
+              weight -20
+              fall 2
+              rise 2
+          }
+
+          vrrp_instance VI_1 {
+              # interface wlan0  # uncomment for wifi
+              interface eth0  # uncomment for ethernet
+              state BACKUP
+              virtual_router_id 205
+              priority 100
+              virtual_ipaddress {
+                  192.168.1.30/24
+              }
+              track_script {
+                  haproxy_container
+              }
+          }
+      notify: Restart keepalived
+
+  handlers:
+    - name: Restart keepalived
+      ansible.builtin.service:
+        name: keepalived
+        state: restarted
+
+
+#########################
+# Deploy HAProxy as a Docker Service
+#########################
+- name: Deploy HAProxy as a single-replica Swarm service
+  hosts: manager
+  become: yes
+  collections: 
+    - community.docker
+
+  tasks:
+    - name: Ensure proxy_network overlay exists 
+      docker_network: 
+        name: proxy_network 
+        driver: overlay 
+        scope: swarm 
+        state: present
+
+    - name: Deploy HAProxy service
+      docker_swarm_service:
+        name: haproxy-service
+        image: haproxy:latest
+        mode: replicated
+        replicas: 1
+        networks:
+          - proxy_network
+        publish:
+          - published_port: 80
+            target_port: 80
+            protocol: tcp
+            mode: ingress
+          - published_port: 443
+            target_port: 443
+            protocol: tcp
+            mode: ingress
+        mounts:
+          - type: bind
+            source: /etc/haproxy
+            target: /usr/local/etc/haproxy
+            readonly: true
+        dns:
+          - 127.0.0.11

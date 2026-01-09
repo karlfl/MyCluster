@@ -1,0 +1,82 @@
+version: "3.9"
+
+services:
+  grafana:
+    image: grafana/grafana-oss:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        max_replicas_per_node: 1
+        constraints: [node.labels.monitoring_host==true]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_password
+    secrets:
+      - grafana_admin_password
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - grafana_provisioning:/etc/grafana/provisioning 
+      - grafana_dashboards:/var/lib/grafana/dashboards
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        max_replicas_per_node: 1
+        constraints: [node.labels.monitoring_host==true]
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus_data:/prometheus
+      - prometheus_config:/etc/prometheus
+    networks:
+      - monitoring
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "9100:9100"
+    networks:
+      - monitoring
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+
+networks:
+  monitoring:
+    driver: overlay
+
+volumes:
+  grafana_data:
+    external: true
+  grafana_provisioning:
+    external: true
+  grafana_dashboards:
+    external: true
+  prometheus_data:
+    external: true
+  prometheus_config:
+    external: true
+
+secrets:
+  grafana_admin_password:
+    external: true

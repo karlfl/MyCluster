@@ -1,0 +1,111 @@
+---
+- name: Deploy Grafana stack to Docker Swarm
+  hosts: manager
+  become: yes
+
+  vars:
+    stack_name: monitoring
+    stack_file: grafana-prometheus-stack.yml
+    stack_src: ../stacks/grafana/{{ stack_file }}
+
+  tasks:
+    # ------------------------- 
+    # Create Docker volumes 
+    # -------------------------
+    - name: Ensure grafana_data volume exists 
+      community.docker.docker_volume: 
+        name: "grafana_data"
+        state: present
+
+    - name: Ensure grafana_provisioning volume exists 
+      community.docker.docker_volume: 
+        name: "grafana_provisioning"
+        state: present
+
+    - name: Ensure grafana_dashboards volume exists 
+      community.docker.docker_volume: 
+        name: "grafana_dashboards"
+        state: present
+
+    - name: Ensure prometheus_data volume exists 
+      community.docker.docker_volume: 
+        name: prometheus_data 
+        state: present 
+        
+    - name: Ensure prometheus_config volume exists 
+      community.docker.docker_volume: 
+        name: prometheus_config 
+        state: present 
+    
+    # ------------------------- 
+    # Create required subdirectories
+    # -------------------------
+    - name: Ensure dashboards directory exists inside provisioning volume 
+      file: 
+        path: /var/lib/docker/volumes/grafana_provisioning/_data/dashboards 
+        state: directory 
+        owner: root 
+        group: root 
+        mode: 0755
+
+    - name: Ensure datasources directory exists inside provisioning volume 
+      file: 
+        path: /var/lib/docker/volumes/grafana_provisioning/_data/datasources 
+        state: directory 
+        owner: root 
+        group: root 
+        mode: 0755
+
+    # ------------------------- 
+    # Copy provisioning files
+    # -------------------------
+    - name: Copy Grafana datasource provisioning 
+      copy: 
+        src: ../stacks/grafana/grafana-datasource.yml 
+        dest: /var/lib/docker/volumes/grafana_provisioning/_data/datasources/datasources.yml 
+        owner: root 
+        group: root 
+        mode: 0644
+
+    - name: Copy Grafana dashboard provisioning config
+      copy:
+        src: ../stacks/grafana/grafana-dashboards.yml
+        dest: /var/lib/docker/volumes/grafana_provisioning/_data/dashboards/dashboards.yml
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Copy Grafana dashboards
+      copy:
+        src: ../stacks/grafana/dashboards/
+        dest: /var/lib/docker/volumes/grafana_dashboards/_data/
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Copy Prometheus config into config volume 
+      copy: 
+        src: ../stacks/grafana/prometheus.yml 
+        dest: /var/lib/docker/volumes/prometheus_config/_data/prometheus.yml 
+        owner: root 
+        group: root 
+        mode: 0644
+
+    # ------------------------- 
+    # Deploy stack
+    # -------------------------
+    - name: Copy {{ stack_file }} to manager
+      copy:
+        src: "{{ stack_src }}"
+        dest: "/tmp/{{ stack_file }}"
+        owner: root
+        group: root
+        mode: 0644
+
+    - name: Deploy {{ stack_name }} stack using Ansible module 
+      community.docker.docker_stack: 
+        name: "{{ stack_name }}" 
+        state: present 
+        compose: 
+          - "/tmp/{{ stack_file }}"
+

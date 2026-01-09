@@ -1,0 +1,106 @@
+---
+- name: Validate NFS Server and Client Configuration
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  vars:
+    nfs_export_path: "/mnt/nfs"
+    nfs_client_mount: "/mnt/nfs"
+
+  tasks:
+
+    # -----------------------------
+    # SERVER VALIDATION
+    # -----------------------------
+    - name: Identify NFS server
+      debug:
+        msg: "Running NFS server checks"
+      when: inventory_hostname in groups['nfshost']
+
+    - name: Check active NFS exports
+      command: exportfs -v
+      register: exportfs_output
+      changed_when: false
+      when: inventory_hostname in groups['nfshost']
+
+    - name: Show NFS export list
+      debug:
+        var: exportfs_output.stdout_lines
+      when: inventory_hostname in groups['nfshost']
+
+    - name: Check NFS service status
+      command: systemctl is-active nfs-kernel-server
+      register: nfs_service
+      changed_when: false
+      when: inventory_hostname in groups['nfshost']
+
+    - name: Show NFS service state
+      debug:
+        var: nfs_service.stdout
+      when: inventory_hostname in groups['nfshost']
+
+    # -----------------------------
+    # CLIENT VALIDATION
+    # -----------------------------
+    - name: Identify NFS clients
+      debug:
+        msg: "Running NFS client checks"
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Check exports visible from client
+      command: showmount -e {{ groups['nfshost'][0] }}
+      register: showmount_output
+      changed_when: false
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Show exports visible to client
+      debug:
+        var: showmount_output.stdout_lines
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Check if NFS mount is active
+      command: mount | grep {{ nfs_client_mount }}
+      register: mount_check
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Show mount status
+      debug:
+        var: mount_check.stdout
+      when: inventory_hostname not in groups['nfshost']
+
+    # -----------------------------
+    # READ/WRITE TEST
+    # -----------------------------
+    - name: Create test file on NFS share
+      command: touch {{ nfs_client_mount }}/ansible_testfile
+      register: write_test
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Write data to test file
+      command: bash -c "echo 'hello from {{ inventory_hostname }}' > {{ nfs_client_mount }}/ansible_testfile"
+      register: write_data
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Read data back from test file
+      command: cat {{ nfs_client_mount }}/ansible_testfile
+      register: read_test
+      failed_when: false
+      changed_when: false
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Show readback result
+      debug:
+        var: read_test.stdout
+      when: inventory_hostname not in groups['nfshost']
+
+    - name: Remove test file
+      command: rm -f {{ nfs_client_mount }}/ansible_testfile
+      changed_when: false
+      when: inventory_hostname not in groups['nfshost']

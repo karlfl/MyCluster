@@ -1,0 +1,63 @@
+#########################
+# Setup Prerequisites
+#########################
+- name: Setup PiHole Prerequisites on all Nodes
+  hosts: pihole
+  become: true
+  collections: 
+    - community.docker
+  tasks:
+    - name: Ensure PiHole config directory exists
+      file:
+        path: /etc/pihole
+        state: directory
+        mode: '0755'
+
+#########################
+# Deploy PiHole as a Docker Stack
+#########################
+- name: Deploy PiHole as a single-replica Swarm service
+  hosts: manager
+  become: yes
+  collections: 
+    - community.docker
+    
+  tasks:
+    - name: Deploy PiHole Stack
+      docker_swarm_service:
+        name: pihole-service
+        image: pihole/pihole:latest
+        mode: replicated
+        replicas: 2
+        placement:
+          replicas_max_per_node: 1
+          constraints:  
+            - "node.labels.pihole == true"
+        cap_add:
+          - NET_ADMIN
+          - SYS_TIME
+          - SYS_NICE
+        networks:
+          - host
+        secrets:
+          - secret_name: pihole_webpassword
+            secret_id: ggdghawnriqm17swfof9lm0ar 
+            filename: /run/secrets/pihole_webpassword.txt
+        env:
+          TZ: Americas/Detroit
+          "WEBPASSWORD_FILE": "/run/secrets/pihole_webpassword.txt"
+          "FTLCONF_webserver_port": "8080"
+        publish:
+          - published_port: 53
+            target_port: 53
+            protocol: tcp
+            mode: host
+          - published_port: 53
+            target_port: 53
+            protocol: udp
+            mode: host
+        mounts:
+          - type: bind
+            source: /etc/pihole
+            target: /etc/pihole 
+            readonly: false
