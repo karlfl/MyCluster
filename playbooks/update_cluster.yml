@@ -1,0 +1,20 @@
+- name: Cluster Update
+  hosts: cluster
+  become: yes
+  tasks:
+    # APT Update/Upgrade/RemoveAll
+    - name: APT Update/Upgrade/RemoveAll.
+      include_tasks: tasks/OS/apt_update.yml
+
+    # Docker System Prune
+    - name: Prune Docker (containers, images, networks, volumes)
+      include_tasks: tasks/Docker/prune_system.yml
+
+    # Display Node Uptime
+    - name: Get Current Uptime
+      include_tasks: tasks/OS/uptime.yml
+
+    # Reboot Node If Required
+    - name: Check if a reboot is required.
+      include_tasks: tasks/OS/reboot_required.yml
+

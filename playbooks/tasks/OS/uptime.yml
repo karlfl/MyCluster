@@ -1,0 +1,8 @@
+    # Display Node Uptime
+    - name: Get Current Uptime
+      command: "uptime"
+      register: uptime_output
+    - name: Uptime Output
+      debug:
+        var: uptime_output.stdout_lines
+

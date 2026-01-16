@@ -1,0 +1,23 @@
+    - name: Download Docker Script
+      ansible.builtin.get_url:
+        url: https://get.docker.com
+        dest: /tmp/get-docker.sh
+        register: docker_download_output
+    - name: Download Docker Script Output
+      debug:
+        var: docker_download_output
+
+    - name: Run Docker Script
+      ansible.builtin.shell:
+        cmd: cat /tmp/get-docker.sh | sh -s -- -y
+        register: docker_install_output
+    - name: Docker Install Output
+      debug:
+        var: docker_install_output
+
+    - name: Add admin User to Docker Group
+      user:
+        name: admin
+        groups:
+          - docker
+        append: yes

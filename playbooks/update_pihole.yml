@@ -1,0 +1,19 @@
+- name: Pi.Hole Update
+  hosts: piholeone
+  become: yes
+  tasks:
+    # APT Update/Upgrade/RemoveAll
+    - name: APT Update/Upgrade/RemoveAll.
+      include_tasks: tasks/OS/apt_update.yml
+
+    # Pi.hole Update
+    - name: PI.Hole Update
+      include_tasks: tasks/PiHole/update_pihole.yml
+
+    # Node Uptime
+    - name: Get Current Uptime
+      include_tasks: tasks/OS/uptime.yml
+
+    # Reboot Node If Required
+    - name: Check if a reboot is required.
+      include_tasks: tasks/OS/reboot_required.yml

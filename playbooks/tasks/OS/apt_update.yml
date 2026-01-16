@@ -1,0 +1,11 @@
+    # APT Update/Upgrade/RemoveAll
+    - name: APT Update/Upgrade/RemoveAll.
+      apt:
+        update_cache: true
+        upgrade: dist
+        autoremove: true
+      register: apt_upgrade
+    - name: APT Output
+      debug:
+        var: apt_upgrade.stdout_lines
+

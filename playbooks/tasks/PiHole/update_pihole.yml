@@ -1,0 +1,8 @@
+    # Pi.hole Update
+  - name: Update Pi-hole
+    command: pihole -up
+    register: pihole_update_result
+    changed_when: "'Everything is already up to date' not in pihole_update_result.stdout"
+  - name: Display Pi-hole update results
+    debug:
+      var: pihole_update_result.stdout_lines
